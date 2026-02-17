@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { FileText, AlertTriangle, CheckCircle, Clock, TrendingUp } from "lucide-react";
 import { StatCard } from "./StatCard";
 import { RecentIncidents } from "./RecentIncidents";
 import { ComplianceScore } from "./ComplianceScore";
 import { PendingActions } from "./PendingActions";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardViewProps {
   onQuickAction: (action: string) => void;
@@ -10,36 +12,80 @@ interface DashboardViewProps {
   onViewIncidents: () => void;
 }
 
+interface DashboardStats {
+  totalDocs: number;
+  docsInReview: number;
+  openIncidents: number;
+  activeCAPAs: number;
+  approvedDocsPct: string;
+}
+
 export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncidents }: DashboardViewProps) {
+  const [stats, setStats] = useState<DashboardStats>({
+    totalDocs: 0,
+    docsInReview: 0,
+    openIncidents: 0,
+    activeCAPAs: 0,
+    approvedDocsPct: "0%",
+  });
+
+  useEffect(() => {
+    async function fetchStats() {
+      const [docsRes, docsReviewRes, incRes, capasRes] = await Promise.all([
+        (supabase as any).from("documents").select("id", { count: "exact", head: true }),
+        (supabase as any).from("documents").select("id", { count: "exact", head: true }).eq("status", "review"),
+        (supabase as any).from("incidencias").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+        (supabase as any).from("actions").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+      ]);
+
+      const totalDocs = docsRes.count ?? 0;
+      const docsInReview = docsReviewRes.count ?? 0;
+      const openIncidents = incRes.count ?? 0;
+      const activeCAPAs = capasRes.count ?? 0;
+
+      // Approved docs percentage
+      const approvedRes = await (supabase as any).from("documents").select("id", { count: "exact", head: true }).eq("status", "approved");
+      const approved = approvedRes.count ?? 0;
+      const pct = totalDocs > 0 ? Math.round((approved / totalDocs) * 100) : 0;
+
+      setStats({
+        totalDocs,
+        docsInReview,
+        openIncidents,
+        activeCAPAs,
+        approvedDocsPct: `${pct}%`,
+      });
+    }
+
+    void fetchStats();
+  }, []);
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Documentos Activos"
-          value="127"
-          subtitle="23 pendientes de revisión"
+          value={stats.totalDocs}
+          subtitle={`${stats.docsInReview} pendientes de revisión`}
           icon={FileText}
           variant="default"
         />
         <StatCard
           title="Incidencias Abiertas"
-          value="8"
-          trend={{ value: 12, isPositive: false }}
+          value={stats.openIncidents}
           icon={AlertTriangle}
           variant="warning"
         />
         <StatCard
-          title="CAPAs en Curso"
-          value="5"
-          subtitle="2 requieren atención"
+          title="Acciones en Curso"
+          value={stats.activeCAPAs}
           icon={Clock}
           variant="accent"
         />
         <StatCard
-          title="SOPs Actualizados"
-          value="94%"
-          trend={{ value: 5, isPositive: true }}
+          title="SOPs Aprobados"
+          value={stats.approvedDocsPct}
           icon={CheckCircle}
           variant="success"
         />
@@ -47,12 +93,9 @@ export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncid
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Incidents - Spans 2 columns */}
         <div className="lg:col-span-2">
           <RecentIncidents onViewAll={onViewIncidents} onSelectIncident={onViewIncidents} />
         </div>
-
-        {/* Compliance Score */}
         <div>
           <ComplianceScore />
         </div>

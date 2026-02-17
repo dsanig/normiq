@@ -1,7 +1,38 @@
+import { useEffect, useState } from "react";
 import { Shield, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export function ComplianceScore() {
-  const score = 87;
+  const [docsPct, setDocsPct] = useState(0);
+  const [incPct, setIncPct] = useState(0);
+  const [actionsPct, setActionsPct] = useState(0);
+
+  useEffect(() => {
+    async function fetch() {
+      const [totalDocsRes, approvedDocsRes, totalIncRes, closedIncRes, totalActRes, closedActRes] = await Promise.all([
+        (supabase as any).from("documents").select("id", { count: "exact", head: true }),
+        (supabase as any).from("documents").select("id", { count: "exact", head: true }).eq("status", "approved"),
+        (supabase as any).from("incidencias").select("id", { count: "exact", head: true }),
+        (supabase as any).from("incidencias").select("id", { count: "exact", head: true }).eq("status", "closed"),
+        (supabase as any).from("actions").select("id", { count: "exact", head: true }),
+        (supabase as any).from("actions").select("id", { count: "exact", head: true }).eq("status", "closed"),
+      ]);
+
+      const totalDocs = totalDocsRes.count ?? 0;
+      const approved = approvedDocsRes.count ?? 0;
+      const totalInc = totalIncRes.count ?? 0;
+      const closedInc = closedIncRes.count ?? 0;
+      const totalAct = totalActRes.count ?? 0;
+      const closedAct = closedActRes.count ?? 0;
+
+      setDocsPct(totalDocs > 0 ? Math.round((approved / totalDocs) * 100) : 0);
+      setIncPct(totalInc > 0 ? Math.round((closedInc / totalInc) * 100) : 0);
+      setActionsPct(totalAct > 0 ? Math.round((closedAct / totalAct) * 100) : 0);
+    }
+    void fetch();
+  }, []);
+
+  const score = Math.round((docsPct + incPct + actionsPct) / 3);
   const circumference = 2 * Math.PI * 45;
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
@@ -15,28 +46,10 @@ export function ComplianceScore() {
       <div className="flex items-center justify-center py-4">
         <div className="relative">
           <svg className="w-32 h-32 -rotate-90">
-            <circle
-              cx="64"
-              cy="64"
-              r="45"
-              stroke="currentColor"
-              strokeWidth="10"
-              fill="none"
-              className="text-secondary"
-            />
-            <circle
-              cx="64"
-              cy="64"
-              r="45"
-              stroke="currentColor"
-              strokeWidth="10"
-              fill="none"
-              strokeLinecap="round"
+            <circle cx="64" cy="64" r="45" stroke="currentColor" strokeWidth="10" fill="none" className="text-secondary" />
+            <circle cx="64" cy="64" r="45" stroke="currentColor" strokeWidth="10" fill="none" strokeLinecap="round"
               className="text-accent transition-all duration-1000"
-              style={{
-                strokeDasharray: circumference,
-                strokeDashoffset: strokeDashoffset,
-              }}
+              style={{ strokeDasharray: circumference, strokeDashoffset }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -47,40 +60,21 @@ export function ComplianceScore() {
       </div>
 
       <div className="space-y-3 mt-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Documentación</span>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-success rounded-full" style={{ width: "92%" }} />
+        {[
+          { label: "Documentación", pct: docsPct, color: "bg-success" },
+          { label: "Incidencias resueltas", pct: incPct, color: "bg-accent" },
+          { label: "Acciones cerradas", pct: actionsPct, color: "bg-warning" },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{item.label}</span>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden">
+                <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.pct}%` }} />
+              </div>
+              <span className="text-foreground font-medium">{item.pct}%</span>
             </div>
-            <span className="text-foreground font-medium">92%</span>
           </div>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Procesos</span>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full" style={{ width: "85%" }} />
-            </div>
-            <span className="text-foreground font-medium">85%</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Incidencias</span>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-warning rounded-full" style={{ width: "78%" }} />
-            </div>
-            <span className="text-foreground font-medium">78%</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-border">
-        <div className="flex items-center gap-2 text-sm text-success">
-          <TrendingUp className="w-4 h-4" />
-          <span>+3% respecto al mes anterior</span>
-        </div>
+        ))}
       </div>
     </div>
   );
