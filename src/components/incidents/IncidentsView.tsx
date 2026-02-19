@@ -75,19 +75,64 @@ export function IncidentsView({
   const [form, setForm] = useState(defaultForm(initialIncidentType));
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const { toast } = useToast();
   const { canEditContent } = usePermissions();
 
   const loadData = async () => {
-    const [{ data: incidenciasData, error: incidenciasError }, { data: auditsData }, { data: usersData }] = await Promise.all([
-      (supabase as any).from("incidencias").select("id,title,description,incidencia_type,audit_id,responsible_id,status,created_at,created_by").order("created_at", { ascending: false }),
-      (supabase as any).from("audits").select("id,title").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("user_id,full_name,email"),
-    ]);
-    if (incidenciasError) { toast({ title: "Error", description: incidenciasError.message, variant: "destructive" }); return; }
-    setIncidents((incidenciasData ?? []) as Incident[]);
-    setAudits((auditsData ?? []) as AuditRef[]);
-    setUsers((usersData ?? []).map((u) => ({ id: u.user_id, full_name: u.full_name, email: u.email })) as UserRef[]);
+    setIsLoading(true);
+    setLoadError(null);
+    setPermissionDenied(false);
+
+    try {
+      const [{ data: incidenciasData, error: incidenciasError }, { data: auditsData, error: auditsError }, { data: usersData, error: usersError }] = await Promise.all([
+        (supabase as any).from("incidencias").select("id,title,description,incidencia_type,audit_id,responsible_id,status,created_at,created_by").order("created_at", { ascending: false }),
+        (supabase as any).from("audits").select("id,title").order("created_at", { ascending: false }),
+        supabase.from("profiles").select("user_id,full_name,email"),
+      ]);
+
+      if (incidenciasError) {
+        const denied = incidenciasError.code === "42501" || /permission|rls|policy|forbidden|not authorized/i.test(incidenciasError.message);
+        setPermissionDenied(denied);
+        setLoadError(denied ? "No tienes permisos para ver incidencias." : incidenciasError.message);
+        setIncidents([]);
+        toast({ title: "Error", description: denied ? "No tienes permisos para ver incidencias." : incidenciasError.message, variant: "destructive" });
+        return;
+      }
+
+      if (auditsError) {
+        console.error("[IncidentsView] Error loading audits", auditsError);
+      }
+
+      if (usersError) {
+        console.error("[IncidentsView] Error loading profiles", usersError);
+      }
+
+      const safeIncidents = Array.isArray(incidenciasData) ? (incidenciasData as Incident[]) : [];
+      const safeAudits = Array.isArray(auditsData)
+        ? (auditsData as AuditRef[]).filter((audit) => Boolean(audit?.id) && Boolean(audit?.title))
+        : [];
+      const safeUsers = Array.isArray(usersData)
+        ? usersData
+            .map((u) => ({ id: u.user_id, full_name: u.full_name, email: u.email }))
+            .filter((u): u is UserRef => typeof u.id === "string" && u.id.trim().length > 0)
+        : [];
+
+      setIncidents(safeIncidents);
+      setAudits(safeAudits);
+      setUsers(safeUsers);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudieron cargar las incidencias.";
+      setLoadError(message);
+      setIncidents([]);
+      setAudits([]);
+      setUsers([]);
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => { void loadData(); }, []);
@@ -159,6 +204,12 @@ export function IncidentsView({
     if (!userId) return null;
     const u = users.find((u) => u.id === userId);
     return u ? (u.full_name ?? u.email ?? userId) : null;
+  };
+
+  const formatIncidentDate = (dateValue: string | null | undefined) => {
+    if (!dateValue) return "Fecha no disponible";
+    const parsedDate = new Date(dateValue);
+    return Number.isNaN(parsedDate.getTime()) ? "Fecha no disponible" : parsedDate.toLocaleDateString();
   };
 
   const renderFormFields = () => (
@@ -254,7 +305,7 @@ export function IncidentsView({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{incident.title}</p>
-                    <p className="text-sm text-muted-foreground">{typeLabels[incident.incidencia_type]} • {new Date(incident.created_at).toLocaleDateString()}</p>
+                    <p className="text-sm text-muted-foreground">{typeLabels[incident.incidencia_type] ?? "Incidencia"} • {formatIncidentDate(incident.created_at)}</p>
                     {auditTitle && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><LinkIcon className="h-3 w-3" />Auditoría: {auditTitle}</p>}
                     {responsibleName && <p className="text-xs text-muted-foreground mt-0.5">Responsable: {responsibleName}</p>}
                   </div>
@@ -266,8 +317,20 @@ export function IncidentsView({
               </div>
             );
           })}
-          {filteredIncidents.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">No se encontraron resultados para “{searchQuery}”.</p>
+          {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Cargando incidencias...</p>}
+          {!isLoading && loadError && (
+            <div className="rounded border border-destructive/40 bg-destructive/5 p-4">
+              <p className="text-sm font-medium text-destructive">{permissionDenied ? "No tienes permisos" : "Error cargando incidencias"}</p>
+              <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
+              <Button variant="outline" className="mt-3" onClick={() => void loadData()}>
+                Reintentar
+              </Button>
+            </div>
+          )}
+          {!isLoading && !loadError && filteredIncidents.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {searchQuery ? `No se encontraron resultados para “${searchQuery}”.` : "No hay incidencias registradas todavía."}
+            </p>
           )}
         </CardContent>
       </Card>
@@ -291,7 +354,7 @@ export function IncidentsView({
             <DialogTitle>Editar incidencia</DialogTitle>
             {editingIncident && (
               <DialogDescription>
-                Creada por: {getUserName(editingIncident.created_by) ?? "Desconocido"} • {new Date(editingIncident.created_at).toLocaleDateString()}
+                Creada por: {getUserName(editingIncident.created_by) ?? "Desconocido"} • {formatIncidentDate(editingIncident.created_at)}
               </DialogDescription>
             )}
           </DialogHeader>

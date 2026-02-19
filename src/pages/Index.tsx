@@ -17,6 +17,7 @@ import { TrainingExamView } from "@/components/training/TrainingExamView";
 import { AuditSimulatorView } from "@/components/audit/AuditSimulatorView";
 import { PredictiveAnalyticsView } from "@/components/analytics/PredictiveAnalyticsView";
 import { AuditManagementView } from "@/components/audit/AuditManagementView";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const moduleConfig: Record<string, { title: string; subtitle?: string }> = {
   dashboard: { title: "Panel de Control", subtitle: "Visión general del estado de cumplimiento" },
@@ -49,6 +50,7 @@ const Index = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isNewDocumentOpen, setIsNewDocumentOpen] = useState(false);
   const [isNewIncidentOpen, setIsNewIncidentOpen] = useState(false);
+  const [incidentViewResetSeed, setIncidentViewResetSeed] = useState(0);
   const [incidentTypeSeed, setIncidentTypeSeed] = useState<IncidentType | undefined>(undefined);
   const { user, isLoading } = useAuth();
   const { enabledFeatures } = useCompanyFeatures();
@@ -171,16 +173,25 @@ const Index = () => {
         );
       case "incidents":
         return (
-          <IncidentsView
-            searchQuery={activeSearchQuery}
-            onSearchChange={handleSearchChange}
-            filters={filters}
-            onFiltersChange={setFilters}
-            onOpenFilters={() => setIsFilterOpen(true)}
-            isNewIncidentOpen={isNewIncidentOpen}
-            onNewIncidentOpenChange={setIsNewIncidentOpen}
-            initialIncidentType={incidentTypeSeed}
-          />
+          <ErrorBoundary
+            title="Error cargando Incidencias"
+            description="Se produjo un problema inesperado al abrir el módulo de incidencias."
+            retryLabel="Reintentar"
+            onRetry={() => setIncidentViewResetSeed((prev) => prev + 1)}
+            resetKeys={[incidentViewResetSeed, activeModule]}
+          >
+            <IncidentsView
+              key={`incidents-${incidentViewResetSeed}`}
+              searchQuery={activeSearchQuery}
+              onSearchChange={handleSearchChange}
+              filters={filters}
+              onFiltersChange={setFilters}
+              onOpenFilters={() => setIsFilterOpen(true)}
+              isNewIncidentOpen={isNewIncidentOpen}
+              onNewIncidentOpenChange={setIsNewIncidentOpen}
+              initialIncidentType={incidentTypeSeed}
+            />
+          </ErrorBoundary>
         );
       case "audits":
         return <AuditManagementView />;
