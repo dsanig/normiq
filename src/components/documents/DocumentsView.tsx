@@ -87,7 +87,7 @@ function buildAutoFirmaUrl(fileB64: string, fileName: string): string {
   return `afirma://sign?${params.toString()}`;
 }
 
-const getDocumentFormat = (fileType?: string): Document["format"] => {
+const normalizeDocumentFileType = (fileType?: string): Document["format"] => {
   const normalizedType = fileType?.toLowerCase();
 
   if (normalizedType === "doc" || normalizedType === "docx" || normalizedType === "word") {
@@ -99,25 +99,6 @@ const getDocumentFormat = (fileType?: string): Document["format"] => {
   }
 
   return "pdf";
-};
-
-const getDocumentFileTypeForDb = (fileType?: string): "pdf" | "word" | "excel" => {
-  const format = getDocumentFormat(fileType);
-
-  if (format === "docx") {
-    return "word";
-  }
-
-  if (format === "xlsx") {
-    return "excel";
-  }
-
-  return "pdf";
-};
-
-const getFileExtension = (fileName: string): string => {
-  const extension = fileName.split(".").pop()?.toLowerCase();
-  return extension || "pdf";
 };
 
 
@@ -264,7 +245,7 @@ export function DocumentsView({
         owner: ownerUserMap.get(d.owner_id) || d.owner_id,
         ownerId: d.owner_id,
         pageCount: 0,
-        format: getDocumentFormat(d.file_type),
+        format: normalizeDocumentFileType(d.file_type),
         originalAuthor: ownerUserMap.get(d.owner_id) || d.owner_id,
         lastModifiedBy: ownerUserMap.get(d.owner_id) || d.owner_id,
         fileUrl: d.file_url,
@@ -378,8 +359,7 @@ export function DocumentsView({
     setIsUpdatingVersion(true);
     try {
       const newVersion = selectedDocument.versionNum + 1;
-      const fileExt = getFileExtension(updateVersionFile.name);
-      const fileTypeForDb = getDocumentFileTypeForDb(fileExt);
+      const fileExt = normalizeDocumentFileType(updateVersionFile.name.split(".").pop());
       const filePath = `${profile.company_id}/${selectedDocument.id}/${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, updateVersionFile);
@@ -432,8 +412,7 @@ export function DocumentsView({
       if (userError || !userData.user) throw userError ?? new Error("No se pudo obtener el usuario.");
 
       const uploaderUser = userData.user;
-      const fileExt = getFileExtension(newDocFile.name);
-      const fileTypeForDb = getDocumentFileTypeForDb(fileExt);
+      const fileExt = normalizeDocumentFileType(newDocFile.name.split(".").pop());
       const documentId = crypto.randomUUID();
       const filePath = `${profile.company_id}/${documentId}/${newDocFile.name}`;
 
