@@ -44,17 +44,35 @@ type Decision =
   | "PROFILE_EMAIL_FALLBACK_NOT_ALLOWED"
   | "PROFILE_AMBIGUOUS_EMAIL"
   | "PROJECT_ENV_MISMATCH_SUSPECTED"
-  | "UNKNOWN_DENIAL";
+  | "UNKNOWN_DENIAL"
+  | "UNHANDLED_EXCEPTION";
+
+type DebugPayload = {
+  requestId: string;
+  functionVersion: string;
+  projectHost: string | null;
+  hasAuthHeader: boolean;
+  tokenClaims: { sub: string | null; email: string | null };
+  callerId: string | null;
+  callerEmail: string | null;
+  profileById: CallerProfile | null;
+  profileByEmail: CallerProfile | null;
+  decision: Decision;
+  errors: string[];
+} & Record<string, unknown>;
 
 const ASSIGNABLE_ROLES = new Set(["Administrador", "Editor", "Espectador"]);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEBUG_LOGS = Deno.env.get("DEBUG_USER_CREATION") === "true";
-const INCLUDE_DEBUG_IN_RESPONSE = Deno.env.get("INCLUDE_DEBUG_IN_RESPONSE") === "true";
 const BOOTSTRAP_SUPERADMIN = Deno.env.get("BOOTSTRAP_SUPERADMIN") === "true";
 const BOOTSTRAP_ALIGN_PROFILE_ID = Deno.env.get("BOOTSTRAP_ALIGN_PROFILE_ID") === "true";
 const ADMIN_BOOTSTRAP_EMAIL = "admin@admin.com";
 const FUNCTION_NAME = "admin-create-user";
-const FUNCTION_VERSION = "admin-create-user@diag-2";
+const FUNCTION_VERSION = "admin-create-user@diag-002";
+
+function shouldIncludeDebug(): boolean {
+  return Deno.env.get("INCLUDE_DEBUG_IN_RESPONSE") === "true";
+}
 
 const normalizeRole = (role: string) => {
   const normalized = role.trim().toLowerCase();
@@ -115,7 +133,7 @@ const buildErrorBody = (code: ErrorCode, message: string, details?: unknown, deb
     },
   };
 
-  if (DEBUG_LOGS && INCLUDE_DEBUG_IN_RESPONSE && debug) {
+  if (shouldIncludeDebug() && debug) {
     body.error.debug = debug;
   }
 
@@ -129,8 +147,27 @@ const jsonResponse = (body: unknown, status: number, requestId: string) =>
       ...corsHeaders,
       "Content-Type": "application/json",
       "x-request-id": requestId,
+      "x-function-version": FUNCTION_VERSION,
     },
   });
+
+const buildDebugPayload = (payload: Partial<DebugPayload> & Pick<DebugPayload, "requestId" | "decision">): DebugPayload => ({
+  requestId: payload.requestId,
+  functionVersion: FUNCTION_VERSION,
+  projectHost: (payload.projectHost as string | null | undefined) ?? null,
+  hasAuthHeader: payload.hasAuthHeader ?? false,
+  tokenClaims: {
+    sub: payload.tokenClaims?.sub ?? null,
+    email: payload.tokenClaims?.email ?? null,
+  },
+  callerId: payload.callerId ?? null,
+  callerEmail: payload.callerEmail ?? null,
+  profileById: payload.profileById ?? null,
+  profileByEmail: payload.profileByEmail ?? null,
+  decision: payload.decision,
+  errors: payload.errors ?? [],
+  ...payload,
+});
 
 const mapSupabaseAuthError = (message: string): { status: number; code: ErrorCode; message: string } => {
   const normalized = message.toLowerCase();
@@ -171,7 +208,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: { ...corsHeaders, "x-request-id": requestId },
+      headers: { ...corsHeaders, "x-request-id": requestId, "x-function-version": FUNCTION_VERSION },
     });
   }
 
@@ -197,18 +234,23 @@ serve(async (req) => {
       projectHost: functionProjectHost,
       clientProvidedHost,
       debugEnabled: DEBUG_LOGS,
-      includeDebugInResponse: INCLUDE_DEBUG_IN_RESPONSE,
+      includeDebugInResponse: shouldIncludeDebug(),
     });
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
       const decision: Decision = "ENV_INCOMPLETE";
-      const debugPayload = {
-        functionVersion: FUNCTION_VERSION,
+      const debugPayload = buildDebugPayload({
         requestId,
         decision,
         projectHost: functionProjectHost,
+        hasAuthHeader,
+        tokenClaims: { sub: null, email: null },
+        callerId: null,
+        callerEmail: null,
+        profileById: null,
+        profileByEmail: null,
         clientProvidedHost,
-      };
+      });
       logDiagnostic(requestId, "deny", debugPayload);
       return jsonResponse(
         buildErrorBody("internal_error", "Variables de entorno de Supabase incompletas.", null, debugPayload),
@@ -219,30 +261,38 @@ serve(async (req) => {
 
     if (!hasAuthHeader) {
       const decision: Decision = "MISSING_AUTH";
-      const debugPayload = {
-        functionVersion: FUNCTION_VERSION,
+      const debugPayload = buildDebugPayload({
         requestId,
         decision,
         hasAuthHeader,
-        authHeaderPrefixOk,
         projectHost: functionProjectHost,
+        tokenClaims: { sub: null, email: null },
+        callerId: null,
+        callerEmail: null,
+        profileById: null,
+        profileByEmail: null,
+        authHeaderPrefixOk,
         clientProvidedHost,
-      };
+      });
       logDiagnostic(requestId, "deny", debugPayload);
       return jsonResponse(buildErrorBody("unauthorized", "No autorizado.", null, debugPayload), 401, requestId);
     }
 
     if (!authHeaderPrefixOk) {
       const decision: Decision = "INVALID_TOKEN";
-      const debugPayload = {
-        functionVersion: FUNCTION_VERSION,
+      const debugPayload = buildDebugPayload({
         requestId,
         decision,
         hasAuthHeader,
-        authHeaderPrefixOk,
         projectHost: functionProjectHost,
+        tokenClaims: { sub: null, email: null },
+        callerId: null,
+        callerEmail: null,
+        profileById: null,
+        profileByEmail: null,
+        authHeaderPrefixOk,
         clientProvidedHost,
-      };
+      });
       logDiagnostic(requestId, "deny", debugPayload);
       return jsonResponse(buildErrorBody("unauthorized", "Token inválido o expirado.", null, debugPayload), 401, requestId);
     }
@@ -287,8 +337,7 @@ serve(async (req) => {
 
     if (authError || !caller) {
       const decision: Decision = "INVALID_TOKEN";
-      const debugPayload = {
-        functionVersion: FUNCTION_VERSION,
+      const debugPayload = buildDebugPayload({
         requestId,
         decision,
         projectHost: functionProjectHost,
@@ -298,17 +347,19 @@ serve(async (req) => {
         tokenClaims: { sub: tokenSub, email: tokenEmail },
         callerId: null,
         callerEmail: null,
+        profileById: null,
+        profileByEmail: null,
         tokenSubMatchesCaller,
         tokenEmailMatchesCaller,
-      };
+        errors: authError?.message ? [authError.message] : [],
+      });
       logDiagnostic(requestId, "deny", debugPayload);
       return jsonResponse(buildErrorBody("unauthorized", "Token inválido o expirado.", null, debugPayload), 401, requestId);
     }
 
     if ((tokenSub && !tokenSubMatchesCaller) || (tokenEmail && !tokenEmailMatchesCaller)) {
       const decision: Decision = "TOKEN_RUNTIME_MISMATCH";
-      const debugPayload = {
-        functionVersion: FUNCTION_VERSION,
+      const debugPayload = buildDebugPayload({
         requestId,
         decision,
         projectHost: functionProjectHost,
@@ -318,9 +369,11 @@ serve(async (req) => {
         tokenClaims: { sub: tokenSub, email: tokenEmail },
         callerId: caller.id,
         callerEmail,
+        profileById: null,
+        profileByEmail: null,
         tokenSubMatchesCaller,
         tokenEmailMatchesCaller,
-      };
+      });
       logDiagnostic(requestId, "deny", debugPayload);
       return jsonResponse(buildErrorBody("unauthorized", "Token inválido o inconsistente.", null, debugPayload), 401, requestId);
     }
@@ -417,8 +470,7 @@ serve(async (req) => {
       decision = "PROFILE_EMAIL_FALLBACK_NOT_ALLOWED";
     }
 
-    const debugPayload = {
-      functionVersion: FUNCTION_VERSION,
+    const debugPayload = buildDebugPayload({
       requestId,
       decision,
       projectHost: functionProjectHost,
@@ -441,10 +493,8 @@ serve(async (req) => {
       profileEmailCount,
       profileById: byIdResult.data ?? null,
       profileByEmail: byEmailResult.data ?? null,
-      byIdError: byIdResult.error?.message ?? null,
-      byEmailError: byEmailResult.error?.message ?? null,
-      byEmailCountError: emailCountResult.error?.message ?? null,
-    };
+      errors: [byIdResult.error?.message, byEmailResult.error?.message, emailCountResult.error?.message].filter(Boolean),
+    });
 
     logDiagnostic(requestId, "superadmin_authorization", debugPayload);
 
@@ -574,7 +624,7 @@ serve(async (req) => {
         ok: true,
         userId: newUserId,
         email,
-        ...(DEBUG_LOGS && INCLUDE_DEBUG_IN_RESPONSE
+        ...(shouldIncludeDebug()
           ? {
               debug: {
                 functionVersion: FUNCTION_VERSION,
@@ -590,6 +640,26 @@ serve(async (req) => {
       requestId,
     );
   } catch (error) {
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.replace("Bearer ", "").trim() : null;
+    const tokenClaims = token ? decodeJwtClaims(token) : null;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    const functionProjectHost = getHostname(SUPABASE_URL);
+    const debugPayload = buildDebugPayload({
+      requestId,
+      decision: "UNHANDLED_EXCEPTION",
+      projectHost: functionProjectHost,
+      hasAuthHeader: Boolean(authHeader),
+      tokenClaims: {
+        sub: typeof tokenClaims?.sub === "string" ? tokenClaims.sub : null,
+        email: normalizeEmail(typeof tokenClaims?.email === "string" ? tokenClaims.email : null),
+      },
+      callerId: null,
+      callerEmail: null,
+      profileById: null,
+      profileByEmail: null,
+      errors: [error instanceof Error ? error.message : String(error)],
+    });
     console.error(
       JSON.stringify({
         function: FUNCTION_NAME,
@@ -600,7 +670,7 @@ serve(async (req) => {
       }),
     );
     return jsonResponse(
-      buildErrorBody("internal_error", error instanceof Error ? error.message : "Error interno."),
+      buildErrorBody("internal_error", error instanceof Error ? error.message : "Error interno.", null, debugPayload),
       500,
       requestId,
     );
