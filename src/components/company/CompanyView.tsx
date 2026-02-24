@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Building2, Mail, Plus, ToggleLeft } from "lucide-react";
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,11 +119,12 @@ export function CompanyView() {
       return `Error del servidor (${response.status}).`;
     }
 
-    if (error instanceof Error) {
-      return error.message;
+    try {
+      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      return JSON.parse(decoded) as Record<string, unknown>;
+    } catch {
+      return null;
     }
-
-    return "No se pudo crear el usuario.";
   };
 
   const fetchUsers = useCallback(async () => {
@@ -237,8 +237,20 @@ export function CompanyView() {
     };
 
     if (debugUserCreation) {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+
       console.info("[company-users] invoking function", {
         functionName: "admin-create-user",
+        sessionExists: Boolean(session),
+        accessTokenLength: session?.access_token?.length ?? 0,
+        sessionError: sessionError?.message ?? null,
+        userId: userData?.user?.id ?? null,
+        userEmail: userData?.user?.email ?? null,
+        userError: userError?.message ?? null,
         payload: {
           ...createUserPayload,
           password: "[REDACTED]",
@@ -246,24 +258,65 @@ export function CompanyView() {
       });
     }
 
-    const { data, error } = await supabase.functions.invoke("admin-create-user", {
-      body: {
-        ...createUserPayload,
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setIsSubmitting(false);
+      toast({
+        title: "Sesión inválida",
+        description: "No se encontró una sesión autenticada activa.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const functionName = "admin-create-user";
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`;
+    const rawResponse = await fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
       },
+      body: JSON.stringify(createUserPayload),
     });
+
+    const rawBodyText = await rawResponse.text();
+    let parsedBody: unknown = null;
+    if (rawBodyText) {
+      try {
+        parsedBody = JSON.parse(rawBodyText);
+      } catch {
+        parsedBody = rawBodyText;
+      }
+    }
 
     if (debugUserCreation) {
       console.info("[company-users] function response", {
-        functionName: "admin-create-user",
-        status: error ? "error" : "ok",
-        body: data,
+        functionName,
+        hasAuthorizationHeader: true,
+        status: rawResponse.status,
+        rawBodyText,
+        body: parsedBody,
       });
     }
 
     setIsSubmitting(false);
 
-    if (error) {
-      const specificMessage = await extractFunctionErrorMessage(error);
+    if (!rawResponse.ok) {
+      let specificMessage = "No se pudo crear el usuario.";
+      if (parsedBody && typeof parsedBody === "object") {
+        const maybeError = (parsedBody as { error?: { message?: string } | string }).error;
+        if (typeof maybeError === "string") {
+          specificMessage = maybeError;
+        } else if (maybeError && typeof maybeError === "object" && typeof maybeError.message === "string") {
+          specificMessage = maybeError.message;
+        }
+      }
+
       toast({
         title: "No se pudo crear el usuario",
         description: specificMessage,

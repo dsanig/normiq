@@ -32,6 +32,20 @@ const normalizeRole = (role: string) => {
 const ASSIGNABLE_ROLES = new Set(["Administrador", "Editor", "Espectador"]);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEBUG_LOGS = Deno.env.get("DEBUG_USER_CREATION") === "true";
+const INCLUDE_DEBUG_IN_RESPONSE = DEBUG_LOGS;
+
+const decodeJwtClaims = (token: string): Record<string, unknown> | null => {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalizedPayload);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
 
 const decodeJwtClaims = (token: string): Record<string, unknown> | null => {
   const payload = token.split(".")[1];
@@ -50,20 +64,37 @@ type ErrorCode =
   | "bad_request"
   | "unauthorized"
   | "forbidden"
+  | "NOT_SUPERADMIN"
   | "duplicate_email"
   | "invalid_email"
   | "weak_password"
   | "permission_denied"
   | "internal_error";
 
-const buildErrorBody = (code: ErrorCode, message: string, details?: unknown) => ({
-  ok: false,
-  error: {
-    code,
-    message,
-    details: details ?? null,
-  },
-});
+const buildErrorBody = (code: ErrorCode, message: string, details?: unknown, debug?: unknown) => {
+  const body: {
+    ok: false;
+    error: {
+      code: ErrorCode;
+      message: string;
+      details: unknown;
+      debug?: unknown;
+    };
+  } = {
+    ok: false,
+    error: {
+      code,
+      message,
+      details: details ?? null,
+    },
+  };
+
+  if (INCLUDE_DEBUG_IN_RESPONSE && debug) {
+    body.error.debug = debug;
+  }
+
+  return body;
+};
 
 const jsonResponse = (body: unknown, status: number, requestId: string) =>
   new Response(JSON.stringify(body), {
@@ -169,7 +200,7 @@ serve(async (req) => {
 
     if (isSuperadminError || !isSuperadminData) {
       return jsonResponse(
-        buildErrorBody("forbidden", "Solo el superadministrador puede gestionar usuarios."),
+        buildErrorBody("NOT_SUPERADMIN", "Solo el superadministrador puede gestionar usuarios.", null, debugPayload),
         403,
         requestId
       );
