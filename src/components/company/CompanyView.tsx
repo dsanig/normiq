@@ -50,7 +50,7 @@ type UserDirectoryEntry = {
 
 
 export function CompanyView() {
-  const { canManageCompany, isSuperadmin, refreshPermissions } = usePermissions();
+  const { canManageCompany, canManagePasswords, isSuperadmin, refreshPermissions } = usePermissions();
   const { profile, user } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("perfil");
@@ -73,6 +73,51 @@ export function CompanyView() {
   const decodeJwtClaims = (token: string) => {
     const payload = token.split(".")[1];
     if (!payload) return null;
+
+    try {
+      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      return JSON.parse(decoded) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const extractFunctionErrorMessage = async (error: unknown) => {
+    if (error instanceof FunctionsHttpError) {
+      const response = error.context;
+      const requestId = response.headers.get("x-request-id") ?? response.headers.get("x-amzn-requestid");
+
+      let parsedBody: unknown = null;
+      const rawBody = await response.clone().text();
+      if (rawBody) {
+        try {
+          parsedBody = JSON.parse(rawBody);
+        } catch {
+          parsedBody = rawBody;
+        }
+      }
+
+      if (debugUserCreation) {
+        console.info("[company-users] function error", {
+          functionName: "admin-create-user",
+          status: response.status,
+          requestId,
+          body: parsedBody,
+        });
+      }
+
+      if (parsedBody && typeof parsedBody === "object") {
+        const maybeError = (parsedBody as { error?: { message?: string } | string }).error;
+        if (typeof maybeError === "string") {
+          return maybeError;
+        }
+        if (maybeError && typeof maybeError === "object" && typeof maybeError.message === "string") {
+          return maybeError.message;
+        }
+      }
+
+      return `Error del servidor (${response.status}).`;
+    }
 
     try {
       const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));

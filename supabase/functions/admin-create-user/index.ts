@@ -47,6 +47,19 @@ const decodeJwtClaims = (token: string): Record<string, unknown> | null => {
   }
 };
 
+const decodeJwtClaims = (token: string): Record<string, unknown> | null => {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalizedPayload);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
 type ErrorCode =
   | "bad_request"
   | "unauthorized"
@@ -146,18 +159,9 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "").trim();
     const tokenClaims = decodeJwtClaims(token);
 
-    const supabaseHost = (() => {
-      try {
-        return new URL(SUPABASE_URL).hostname;
-      } catch {
-        return "invalid_url";
-      }
-    })();
-
     if (DEBUG_LOGS) {
       console.info("[admin-create-user] auth header and token diagnostics", {
         requestId,
-        supabaseHost,
         hasAuthorizationHeader: Boolean(authHeader),
         jwtSub: tokenClaims?.sub ?? null,
         jwtEmail: tokenClaims?.email ?? null,
@@ -180,7 +184,6 @@ serve(async (req) => {
 
     const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const roleSource = "profiles.is_superadmin (via rpc:is_superadmin)";
     const { data: isSuperadminData, error: isSuperadminError } = await serviceClient.rpc("is_superadmin", {
       uid: caller.id,
     });
@@ -190,22 +193,12 @@ serve(async (req) => {
         requestId,
         callerId: caller.id,
         callerEmail: caller.email ?? null,
-        roleSource,
         isSuperadmin: isSuperadminData ?? null,
         isSuperadminError: isSuperadminError ? String(isSuperadminError) : null,
       });
     }
 
     if (isSuperadminError || !isSuperadminData) {
-      const debugPayload = {
-        hasAuth: Boolean(authHeader),
-        sub: String(tokenClaims?.sub ?? caller.id),
-        email: String(tokenClaims?.email ?? caller.email ?? ""),
-        roleSource,
-        roleValue: isSuperadminData ?? null,
-        roleError: isSuperadminError ? String(isSuperadminError) : null,
-      };
-
       return jsonResponse(
         buildErrorBody("NOT_SUPERADMIN", "Solo el superadministrador puede gestionar usuarios.", null, debugPayload),
         403,
