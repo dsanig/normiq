@@ -32,25 +32,56 @@ const normalizeRole = (role: string) => {
 const ASSIGNABLE_ROLES = new Set(["Administrador", "Editor", "Espectador"]);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEBUG_LOGS = Deno.env.get("DEBUG_USER_CREATION") === "true";
+const INCLUDE_DEBUG_IN_RESPONSE = DEBUG_LOGS;
+
+const decodeJwtClaims = (token: string): Record<string, unknown> | null => {
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalizedPayload);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
 
 type ErrorCode =
   | "bad_request"
   | "unauthorized"
   | "forbidden"
+  | "NOT_SUPERADMIN"
   | "duplicate_email"
   | "invalid_email"
   | "weak_password"
   | "permission_denied"
   | "internal_error";
 
-const buildErrorBody = (code: ErrorCode, message: string, details?: unknown) => ({
-  ok: false,
-  error: {
-    code,
-    message,
-    details: details ?? null,
-  },
-});
+const buildErrorBody = (code: ErrorCode, message: string, details?: unknown, debug?: unknown) => {
+  const body: {
+    ok: false;
+    error: {
+      code: ErrorCode;
+      message: string;
+      details: unknown;
+      debug?: unknown;
+    };
+  } = {
+    ok: false,
+    error: {
+      code,
+      message,
+      details: details ?? null,
+    },
+  };
+
+  if (INCLUDE_DEBUG_IN_RESPONSE && debug) {
+    body.error.debug = debug;
+  }
+
+  return body;
+};
 
 const jsonResponse = (body: unknown, status: number, requestId: string) =>
   new Response(JSON.stringify(body), {
@@ -113,6 +144,29 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "").trim();
+    const tokenClaims = decodeJwtClaims(token);
+
+    const supabaseHost = (() => {
+      try {
+        return new URL(SUPABASE_URL).hostname;
+      } catch {
+        return "invalid_url";
+      }
+    })();
+
+    if (DEBUG_LOGS) {
+      console.info("[admin-create-user] auth header and token diagnostics", {
+        requestId,
+        supabaseHost,
+        hasAuthorizationHeader: Boolean(authHeader),
+        jwtSub: tokenClaims?.sub ?? null,
+        jwtEmail: tokenClaims?.email ?? null,
+        jwtRole: tokenClaims?.role ?? null,
+        jwtAppRole: tokenClaims?.app_role ?? null,
+        jwtQualiqRole: tokenClaims?.qualiq_role ?? null,
+        jwtCompanyRole: tokenClaims?.company_role ?? null,
+      });
+    }
 
     const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const {
@@ -126,15 +180,34 @@ serve(async (req) => {
 
     const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: callerProfile, error: callerProfileError } = await serviceClient
-      .from("profiles")
-      .select("is_superadmin")
-      .eq("id", caller.id)
-      .single();
+    const roleSource = "profiles.is_superadmin (via rpc:is_superadmin)";
+    const { data: isSuperadminData, error: isSuperadminError } = await serviceClient.rpc("is_superadmin", {
+      uid: caller.id,
+    });
 
-    if (callerProfileError || !callerProfile?.is_superadmin) {
+    if (DEBUG_LOGS) {
+      console.info("[admin-create-user] caller diagnostics", {
+        requestId,
+        callerId: caller.id,
+        callerEmail: caller.email ?? null,
+        roleSource,
+        isSuperadmin: isSuperadminData ?? null,
+        isSuperadminError: isSuperadminError ? String(isSuperadminError) : null,
+      });
+    }
+
+    if (isSuperadminError || !isSuperadminData) {
+      const debugPayload = {
+        hasAuth: Boolean(authHeader),
+        sub: String(tokenClaims?.sub ?? caller.id),
+        email: String(tokenClaims?.email ?? caller.email ?? ""),
+        roleSource,
+        roleValue: isSuperadminData ?? null,
+        roleError: isSuperadminError ? String(isSuperadminError) : null,
+      };
+
       return jsonResponse(
-        buildErrorBody("forbidden", "Solo el superadministrador puede gestionar usuarios."),
+        buildErrorBody("NOT_SUPERADMIN", "Solo el superadministrador puede gestionar usuarios.", null, debugPayload),
         403,
         requestId
       );
