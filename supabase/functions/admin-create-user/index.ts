@@ -68,7 +68,7 @@ const BOOTSTRAP_SUPERADMIN = Deno.env.get("BOOTSTRAP_SUPERADMIN") === "true";
 const BOOTSTRAP_ALIGN_PROFILE_ID = Deno.env.get("BOOTSTRAP_ALIGN_PROFILE_ID") === "true";
 const ADMIN_BOOTSTRAP_EMAIL = "admin@admin.com";
 const FUNCTION_NAME = "admin-create-user";
-const FUNCTION_VERSION = "admin-create-user@diag-999";
+const FUNCTION_VERSION = "admin-create-user@diag-002";
 
 function shouldIncludeDebug(): boolean {
   return Deno.env.get("INCLUDE_DEBUG_IN_RESPONSE") === "true";
@@ -156,14 +156,6 @@ const jsonResponse = (body: unknown, status: number, requestId: string, debugHea
       "Content-Type": "application/json",
       "x-request-id": requestId,
       "x-function-version": FUNCTION_VERSION,
-      "x-debug-enabled": includeDebug ? "true" : "false",
-      ...(includeDebug
-        ? {
-            "x-debug-decision": debugHeaders?.decision ?? "UNKNOWN",
-            "x-debug-caller-email": debugHeaders?.callerEmail ?? "null",
-            "x-debug-project-host": debugHeaders?.projectHost ?? "null",
-          }
-        : {}),
     },
   });
 };
@@ -172,6 +164,24 @@ const responseDebugHeadersFromPayload = (debugPayload: { decision?: string; call
   decision: debugPayload.decision ?? "UNKNOWN",
   callerEmail: debugPayload.callerEmail ?? null,
   projectHost: debugPayload.projectHost ?? null,
+});
+
+const buildDebugPayload = (payload: Partial<DebugPayload> & Pick<DebugPayload, "requestId" | "decision">): DebugPayload => ({
+  requestId: payload.requestId,
+  functionVersion: FUNCTION_VERSION,
+  projectHost: (payload.projectHost as string | null | undefined) ?? null,
+  hasAuthHeader: payload.hasAuthHeader ?? false,
+  tokenClaims: {
+    sub: payload.tokenClaims?.sub ?? null,
+    email: payload.tokenClaims?.email ?? null,
+  },
+  callerId: payload.callerId ?? null,
+  callerEmail: payload.callerEmail ?? null,
+  profileById: payload.profileById ?? null,
+  profileByEmail: payload.profileByEmail ?? null,
+  decision: payload.decision,
+  errors: payload.errors ?? [],
+  ...payload,
 });
 
 const buildDebugPayload = (payload: Partial<DebugPayload> & Pick<DebugPayload, "requestId" | "decision">): DebugPayload => ({
@@ -233,12 +243,10 @@ serve(async (req) => {
   }
 
   if (req.method === "OPTIONS") {
-    return jsonResponse(
-      buildErrorBody("bad_request", "Preflight OPTIONS."),
-      204,
-      requestId,
-      { decision: "OPTIONS_PRELIGHT", callerEmail: null, projectHost: null },
-    );
+    return new Response(null, {
+      status: 204,
+      headers: { ...corsHeaders, "x-request-id": requestId, "x-function-version": FUNCTION_VERSION },
+    });
   }
 
   if (req.method !== "POST") {
