@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle, Clock, Filter, Link as LinkIcon, Plus, Search, Pencil, X } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, Filter, Link as LinkIcon, Plus, Search, Pencil, X, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { FiltersState } from "@/components/filters/FilterModal";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { matchesNormalizedQuery } from "@/utils/search";
+import { IncidentFormFields, type IncidentFormData } from "./IncidentFormFields";
+import { format } from "date-fns";
 
 type IncidentType = "incidencia" | "reclamacion" | "desviacion" | "otra";
 
@@ -26,10 +25,19 @@ interface Incident {
   status: "open" | "in_progress" | "closed" | "overdue";
   created_at: string;
   created_by: string | null;
+  deadline: string | null;
+  resolution_notes: string | null;
 }
 
 interface AuditRef { id: string; title: string; }
 interface UserRef { id: string; full_name: string | null; email: string | null; }
+
+interface AttachmentInfo {
+  id?: string;
+  file_name: string;
+  isNew?: boolean;
+  file?: File;
+}
 
 interface IncidentsViewProps {
   searchQuery: string;
@@ -57,13 +65,15 @@ const statusConfig = {
   overdue: { label: "Vencido", icon: AlertCircle, color: "text-warning" },
 };
 
-const defaultForm = (type?: IncidentType) => ({
+const defaultForm = (type?: IncidentType): IncidentFormData => ({
   title: "",
   description: "",
-  incidencia_type: type ?? ("incidencia" as IncidentType),
+  incidencia_type: type ?? "incidencia",
   audit_id: "none",
   responsible_id: "none",
   status: "open",
+  deadline: null,
+  resolution_notes: "",
 });
 
 export function IncidentsView({
@@ -73,27 +83,24 @@ export function IncidentsView({
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [audits, setAudits] = useState<AuditRef[]>([]);
   const [users, setUsers] = useState<UserRef[]>([]);
-  const [form, setForm] = useState(defaultForm(initialIncidentType));
+  const [form, setForm] = useState<IncidentFormData>(defaultForm(initialIncidentType));
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [newAttachments, setNewAttachments] = useState<AttachmentInfo[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState<AttachmentInfo[]>([]);
   const { toast } = useToast();
   const { canEditContent } = usePermissions();
 
-  const isPermissionError = (message: string, code?: string, status?: number) => {
-    return (
-      code === "42501" ||
-      status === 401 ||
-      status === 403 ||
-      /permission|rls|policy|forbidden|not authorized|violates row level security/i.test(message)
-    );
-  };
+  const isPermissionError = (message: string, code?: string, status?: number) =>
+    code === "42501" || status === 401 || status === 403 ||
+    /permission|rls|policy|forbidden|not authorized|violates row level security/i.test(message);
 
   const getUserName = (userId: string | null | undefined) => {
     if (!userId) return null;
-    const matchedUser = users.find((user) => user?.id === userId);
+    const matchedUser = users.find((u) => u?.id === userId);
     return matchedUser?.full_name ?? matchedUser?.email ?? userId;
   };
 
@@ -110,38 +117,27 @@ export function IncidentsView({
 
     try {
       const [{ data: incidenciasData, error: incidenciasError }, { data: auditsData, error: auditsError }, { data: usersData, error: usersError }] = await Promise.all([
-        (supabase as any).from("incidencias").select("id,title,description,incidencia_type,audit_id,responsible_id,status,created_at,created_by").order("created_at", { ascending: false }),
+        (supabase as any).from("incidencias").select("id,title,description,incidencia_type,audit_id,responsible_id,status,created_at,created_by,deadline,resolution_notes").order("created_at", { ascending: false }),
         (supabase as any).from("audits").select("id,title").order("created_at", { ascending: false }),
         supabase.from("profiles").select("user_id,full_name,email"),
       ]);
 
       if (incidenciasError) {
-        const denied = isPermissionError(incidenciasError.message, incidenciasError.code, (incidenciasError as { status?: number }).status);
+        const denied = isPermissionError(incidenciasError.message, incidenciasError.code, (incidenciasError as any).status);
         setPermissionDenied(denied);
         setLoadError(denied ? "No tienes permisos para ver incidencias de esta empresa." : incidenciasError.message);
-        setIncidents([]);
-        setAudits([]);
-        setUsers([]);
+        setIncidents([]); setAudits([]); setUsers([]);
         toast({ title: "Error", description: denied ? "No tienes permisos para ver incidencias." : incidenciasError.message, variant: "destructive" });
         return;
       }
 
-      if (auditsError) {
-        console.error("[IncidentsView] Error loading audits", auditsError);
-      }
-
-      if (usersError) {
-        console.error("[IncidentsView] Error loading profiles", usersError);
-      }
+      if (auditsError) console.error("[IncidentsView] Error loading audits", auditsError);
+      if (usersError) console.error("[IncidentsView] Error loading profiles", usersError);
 
       const safeIncidents = Array.isArray(incidenciasData) ? (incidenciasData as Incident[]) : [];
-      const safeAudits = Array.isArray(auditsData)
-        ? (auditsData as AuditRef[]).filter((audit) => Boolean(audit?.id) && Boolean(audit?.title))
-        : [];
+      const safeAudits = Array.isArray(auditsData) ? (auditsData as AuditRef[]).filter((a) => Boolean(a?.id) && Boolean(a?.title)) : [];
       const safeUsers = Array.isArray(usersData)
-        ? usersData
-            .map((u) => ({ id: u.user_id, full_name: u.full_name, email: u.email }))
-            .filter((u): u is UserRef => typeof u.id === "string" && u.id.trim().length > 0)
+        ? usersData.map((u) => ({ id: u.user_id, full_name: u.full_name, email: u.email })).filter((u): u is UserRef => typeof u.id === "string" && u.id.trim().length > 0)
         : [];
 
       setIncidents(safeIncidents);
@@ -152,9 +148,7 @@ export function IncidentsView({
       const denied = isPermissionError(message);
       setPermissionDenied(denied);
       setLoadError(message);
-      setIncidents([]);
-      setAudits([]);
-      setUsers([]);
+      setIncidents([]); setAudits([]); setUsers([]);
       toast({ title: "Error", description: message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -166,37 +160,59 @@ export function IncidentsView({
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
 
   const filteredIncidents = useMemo(() => {
-    const safeIncidents = incidents ?? [];
-
-    return safeIncidents.filter((i) => {
+    return (incidents ?? []).filter((i) => {
       const responsibleName = getUserName(i.responsible_id);
-      const matchesQuery = matchesNormalizedQuery(
-        debouncedSearchQuery,
-        i.title,
-        i.description,
-        i.incidencia_type,
-        i.status,
-        responsibleName,
-      );
+      const matchesQuery = matchesNormalizedQuery(debouncedSearchQuery, i.title, i.description, i.incidencia_type, i.status, responsibleName);
       const matchesStatus = filters.incidentStatus === "all" || i.status === filters.incidentStatus;
       return matchesQuery && matchesStatus;
     });
   }, [incidents, debouncedSearchQuery, filters.incidentStatus, users]);
 
+  const uploadAttachments = async (incidenciaId: string) => {
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    for (const att of newAttachments) {
+      if (!att.file) continue;
+      const path = `incidencias/${incidenciaId}/${Date.now()}_${att.file.name}`;
+      const { error: uploadError } = await supabase.storage.from("documents").upload(path, att.file);
+      if (uploadError) {
+        console.error("Upload error", uploadError);
+        toast({ title: "Error subiendo archivo", description: att.file.name, variant: "destructive" });
+        continue;
+      }
+      await (supabase as any).from("incidencia_attachments").insert({
+        incidencia_id: incidenciaId,
+        object_path: path,
+        file_name: att.file.name,
+        file_type: att.file.type || "application/octet-stream",
+        created_by: userId,
+      });
+    }
+  };
+
   const createIncident = async () => {
-    const { data: profileData } = await supabase.from("profiles").select("company_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "").maybeSingle();
-    const { error } = await (supabase as any).from("incidencias").insert({
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { data: profileData } = await supabase.from("profiles").select("company_id").eq("user_id", userId ?? "").maybeSingle();
+    const { data: inserted, error } = await (supabase as any).from("incidencias").insert({
       title: form.title, description: form.description || null, incidencia_type: form.incidencia_type,
       audit_id: form.audit_id === "none" ? null : form.audit_id,
       responsible_id: form.responsible_id === "none" ? null : form.responsible_id,
       status: form.status, company_id: profileData?.company_id,
-      created_by: (await supabase.auth.getUser()).data.user?.id,
-    });
+      created_by: userId,
+      deadline: form.deadline ? format(form.deadline, "yyyy-MM-dd") : null,
+      resolution_notes: form.resolution_notes || null,
+    }).select("id").single();
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (inserted && newAttachments.length > 0) await uploadAttachments(inserted.id);
     toast({ title: "Incidencia creada" });
     onNewIncidentOpenChange(false);
     setForm(defaultForm(initialIncidentType));
+    setNewAttachments([]);
     await loadData();
+  };
+
+  const loadExistingAttachments = async (incidenciaId: string) => {
+    const { data } = await (supabase as any).from("incidencia_attachments").select("id,file_name").eq("incidencia_id", incidenciaId);
+    setExistingAttachments(Array.isArray(data) ? data.map((a: any) => ({ id: a.id, file_name: a.file_name ?? "archivo" })) : []);
   };
 
   const openEdit = (incident: Incident) => {
@@ -208,7 +224,11 @@ export function IncidentsView({
       audit_id: incident.audit_id ?? "none",
       responsible_id: incident.responsible_id ?? "none",
       status: incident.status,
+      deadline: incident.deadline ? new Date(incident.deadline) : null,
+      resolution_notes: incident.resolution_notes ?? "",
     });
+    setNewAttachments([]);
+    void loadExistingAttachments(incident.id);
     setIsEditOpen(true);
   };
 
@@ -219,72 +239,57 @@ export function IncidentsView({
       audit_id: form.audit_id === "none" ? null : form.audit_id,
       responsible_id: form.responsible_id === "none" ? null : form.responsible_id,
       status: form.status,
+      deadline: form.deadline ? format(form.deadline, "yyyy-MM-dd") : null,
+      resolution_notes: form.resolution_notes || null,
     }).eq("id", editingIncident.id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (newAttachments.length > 0) await uploadAttachments(editingIncident.id);
     toast({ title: "Incidencia actualizada" });
     setIsEditOpen(false);
     setEditingIncident(null);
     setForm(defaultForm(initialIncidentType));
+    setNewAttachments([]);
+    setExistingAttachments([]);
     await loadData();
   };
 
-  const renderFormFields = () => (
-    <div className="space-y-3">
-      <div><Label>Título</Label><Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} /></div>
-      <div><Label>Descripción</Label><Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
-      <div>
-        <Label>Tipo</Label>
-        <Select value={form.incidencia_type} onValueChange={(v: IncidentType) => setForm((p) => ({ ...p, incidencia_type: v }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="incidencia">Incidencia</SelectItem>
-            <SelectItem value="reclamacion">Reclamación</SelectItem>
-            <SelectItem value="desviacion">Desviación</SelectItem>
-            <SelectItem value="otra">Otra</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>Auditoría relacionada (opcional)</Label>
-        <Select value={form.audit_id} onValueChange={(v) => setForm((p) => ({ ...p, audit_id: v }))}>
-          <SelectTrigger><SelectValue placeholder="Sin auditoría" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Sin auditoría</SelectItem>
-            {(audits ?? []).map((a) => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>Responsable</Label>
-        <Select value={form.responsible_id} onValueChange={(v) => setForm((p) => ({ ...p, responsible_id: v }))}>
-          <SelectTrigger><SelectValue placeholder="Sin responsable" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Sin responsable</SelectItem>
-            {(users ?? []).map((u) => <SelectItem key={u.id} value={u.id}>{u.full_name ?? u.email ?? u.id}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>Estado</Label>
-        <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">Abierto</SelectItem>
-            <SelectItem value="in_progress">En progreso</SelectItem>
-            <SelectItem value="closed">Cerrado</SelectItem>
-            <SelectItem value="overdue">Vencido</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
+  const handleAddFiles = (files: FileList) => {
+    const items: AttachmentInfo[] = Array.from(files).map((f) => ({ file_name: f.name, isNew: true, file: f }));
+    setNewAttachments((prev) => [...prev, ...items]);
+  };
+
+  const handleRemoveNewAttachment = (index: number) => {
+    setNewAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const allAttachments = [...existingAttachments, ...newAttachments];
+
+  const isDeadlineClose = (deadline: string | null) => {
+    if (!deadline) return false;
+    const d = new Date(deadline);
+    const diff = d.getTime() - Date.now();
+    return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000; // 3 days
+  };
+
+  const isOverdue = (deadline: string | null) => {
+    if (!deadline) return false;
+    return new Date(deadline).getTime() < Date.now();
+  };
+
+  const overdueCount = incidents.filter((i) => i.status !== "closed" && isOverdue(i.deadline)).length;
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Total</p><p className="text-2xl font-semibold">{incidents.length}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Abiertas</p><p className="text-2xl font-semibold">{incidents.filter((i) => i.status === "open").length}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Cerradas</p><p className="text-2xl font-semibold">{incidents.filter((i) => i.status === "closed").length}</p></CardContent></Card>
+        <Card className={overdueCount > 0 ? "border-destructive/40" : ""}>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Vencidas</p>
+            <p className={`text-2xl font-semibold ${overdueCount > 0 ? "text-destructive" : ""}`}>{overdueCount}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -295,13 +300,7 @@ export function IncidentsView({
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input className="pl-9 pr-9 w-[260px]" placeholder="Buscar incidencias..." value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onSearchChange(searchQuery); }} />
               {searchQuery && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
-                  onClick={() => onSearchChange("")}
-                >
+                <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground" onClick={() => onSearchChange("")}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -316,6 +315,8 @@ export function IncidentsView({
             const StatusIcon = status.icon;
             const auditTitle = audits.find((a) => a.id === incident.audit_id)?.title;
             const responsibleName = getUserName(incident.responsible_id);
+            const deadlineOverdue = incident.status !== "closed" && isOverdue(incident.deadline);
+            const deadlineClose = incident.status !== "closed" && isDeadlineClose(incident.deadline);
             return (
               <div key={incident.id} className="rounded border p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => openEdit(incident)}>
                 <div className="flex items-start justify-between gap-3">
@@ -324,6 +325,13 @@ export function IncidentsView({
                     <p className="text-sm text-muted-foreground">{typeLabels[incident.incidencia_type] ?? "Incidencia"} • {formatIncidentDate(incident.created_at)}</p>
                     {auditTitle && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><LinkIcon className="h-3 w-3" />Auditoría: {auditTitle}</p>}
                     {responsibleName && <p className="text-xs text-muted-foreground mt-0.5">Responsable: {responsibleName}</p>}
+                    {incident.deadline && (
+                      <p className={`text-xs mt-0.5 flex items-center gap-1 ${deadlineOverdue ? "text-destructive font-medium" : deadlineClose ? "text-warning" : "text-muted-foreground"}`}>
+                        <CalendarIcon className="h-3 w-3" />
+                        Fecha límite: {new Date(incident.deadline).toLocaleDateString()}
+                        {deadlineOverdue && " (vencida)"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs flex items-center gap-1 ${status.color}`}><StatusIcon className="h-3 w-3" />{status.label}</span>
@@ -339,34 +347,40 @@ export function IncidentsView({
               <p className="text-sm font-medium text-destructive">{permissionDenied ? "No tienes permisos" : "Error cargando incidencias"}</p>
               <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
               {permissionDenied && <p className="text-sm text-muted-foreground mt-1">Contacta con el administrador.</p>}
-              <Button variant="outline" className="mt-3" onClick={() => void loadData()}>
-                Reintentar
-              </Button>
+              <Button variant="outline" className="mt-3" onClick={() => void loadData()}>Reintentar</Button>
             </div>
           )}
           {!isLoading && !loadError && filteredIncidents.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              {searchQuery ? `No se encontraron resultados para “${searchQuery}”.` : "No hay incidencias registradas todavía."}
+              {searchQuery ? `No se encontraron resultados para "${searchQuery}".` : "No hay incidencias registradas todavía."}
             </p>
           )}
         </CardContent>
       </Card>
 
       {/* New incident dialog */}
-      <Dialog open={isNewIncidentOpen} onOpenChange={onNewIncidentOpenChange}>
-        <DialogContent>
+      <Dialog open={isNewIncidentOpen} onOpenChange={(open) => { onNewIncidentOpenChange(open); if (!open) { setNewAttachments([]); setForm(defaultForm(initialIncidentType)); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nueva incidencia</DialogTitle>
             <DialogDescription>Registra incidencia, reclamación, desviación u otra.</DialogDescription>
           </DialogHeader>
-          {renderFormFields()}
+          <IncidentFormFields
+            form={form}
+            onFormChange={setForm}
+            audits={audits}
+            users={users}
+            attachments={newAttachments}
+            onAddFiles={handleAddFiles}
+            onRemoveAttachment={handleRemoveNewAttachment}
+          />
           <DialogFooter><Button onClick={createIncident}>Crear incidencia</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit incident dialog */}
-      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditingIncident(null); }}>
-        <DialogContent>
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingIncident(null); setNewAttachments([]); setExistingAttachments([]); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar incidencia</DialogTitle>
             {editingIncident && (
@@ -375,7 +389,23 @@ export function IncidentsView({
               </DialogDescription>
             )}
           </DialogHeader>
-          {renderFormFields()}
+          <IncidentFormFields
+            form={form}
+            onFormChange={setForm}
+            audits={audits}
+            users={users}
+            isEditing
+            attachments={allAttachments}
+            onAddFiles={canEditContent ? handleAddFiles : undefined}
+            onRemoveAttachment={canEditContent ? (idx) => {
+              if (idx < existingAttachments.length) {
+                // existing attachment - just remove from view (could add DB delete)
+                setExistingAttachments((prev) => prev.filter((_, i) => i !== idx));
+              } else {
+                handleRemoveNewAttachment(idx - existingAttachments.length);
+              }
+            } : undefined}
+          />
           <DialogFooter>
             {canEditContent ? (
               <Button onClick={updateIncident}>Guardar cambios</Button>
