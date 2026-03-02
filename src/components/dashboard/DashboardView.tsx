@@ -16,6 +16,7 @@ interface DashboardStats {
   totalDocs: number;
   docsInReview: number;
   openIncidents: number;
+  overdueIncidents: number;
   activeCAPAs: number;
   approvedDocsPct: string;
 }
@@ -25,23 +26,26 @@ export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncid
     totalDocs: 0,
     docsInReview: 0,
     openIncidents: 0,
+    overdueIncidents: 0,
     activeCAPAs: 0,
     approvedDocsPct: "0%",
   });
 
   useEffect(() => {
     async function fetchStats() {
-      const [docsRes, docsReviewRes, incRes, capasRes] = await Promise.all([
+      const [docsRes, docsReviewRes, incRes, capasRes, overdueRes] = await Promise.all([
         (supabase as any).from("documents").select("id", { count: "exact", head: true }),
         (supabase as any).from("documents").select("id", { count: "exact", head: true }).eq("status", "review"),
         (supabase as any).from("incidencias").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
         (supabase as any).from("actions").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+        (supabase as any).from("incidencias").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]).lt("deadline", new Date().toISOString().split("T")[0]),
       ]);
 
       const totalDocs = docsRes.count ?? 0;
       const docsInReview = docsReviewRes.count ?? 0;
       const openIncidents = incRes.count ?? 0;
       const activeCAPAs = capasRes.count ?? 0;
+      const overdueIncidents = overdueRes.count ?? 0;
 
       // Approved docs percentage
       const approvedRes = await (supabase as any).from("documents").select("id", { count: "exact", head: true }).eq("status", "approved");
@@ -52,6 +56,7 @@ export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncid
         totalDocs,
         docsInReview,
         openIncidents,
+        overdueIncidents,
         activeCAPAs,
         approvedDocsPct: `${pct}%`,
       });
@@ -63,7 +68,7 @@ export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncid
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           title="Documentos Activos"
           value={stats.totalDocs}
@@ -76,6 +81,12 @@ export function DashboardView({ onQuickAction, onViewPendingActions, onViewIncid
           value={stats.openIncidents}
           icon={AlertTriangle}
           variant="warning"
+        />
+        <StatCard
+          title="Incidencias Vencidas"
+          value={stats.overdueIncidents}
+          icon={AlertTriangle}
+          variant={stats.overdueIncidents > 0 ? "destructive" : "default"}
         />
         <StatCard
           title="Acciones en Curso"

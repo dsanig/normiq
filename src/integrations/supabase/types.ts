@@ -547,15 +547,58 @@ export type Database = {
           },
         ]
       }
+      incidencia_attachments: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          created_by: string | null
+          file_name: string | null
+          file_type: string | null
+          id: string
+          incidencia_id: string
+          object_path: string
+        }
+        Insert: {
+          bucket_id?: string
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          id?: string
+          incidencia_id: string
+          object_path: string
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          id?: string
+          incidencia_id?: string
+          object_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incidencia_attachments_incidencia_id_fkey"
+            columns: ["incidencia_id"]
+            isOneToOne: false
+            referencedRelation: "incidencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incidencias: {
         Row: {
           audit_id: string | null
           company_id: string | null
           created_at: string
           created_by: string | null
+          deadline: string | null
           description: string | null
           id: string
           incidencia_type: string
+          resolution_notes: string | null
           responsible_id: string | null
           status: string
           title: string
@@ -565,9 +608,11 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           created_by?: string | null
+          deadline?: string | null
           description?: string | null
           id?: string
           incidencia_type?: string
+          resolution_notes?: string | null
           responsible_id?: string | null
           status?: string
           title: string
@@ -577,9 +622,11 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           created_by?: string | null
+          deadline?: string | null
           description?: string | null
           id?: string
           incidencia_type?: string
+          resolution_notes?: string | null
           responsible_id?: string | null
           status?: string
           title?: string

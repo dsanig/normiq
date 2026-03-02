@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Clock, ArrowRight } from "lucide-react";
+import { AlertTriangle, Clock, ArrowRight, CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ interface Incident {
   incidencia_type: string;
   status: string;
   created_at: string;
+  deadline: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -39,7 +40,7 @@ export function RecentIncidents({ onViewAll, onSelectIncident }: RecentIncidents
     async function fetch() {
       const { data } = await (supabase as any)
         .from("incidencias")
-        .select("id, title, incidencia_type, status, created_at")
+        .select("id, title, incidencia_type, status, created_at, deadline")
         .order("created_at", { ascending: false })
         .limit(5);
       setIncidents((data as Incident[]) ?? []);
@@ -94,6 +95,13 @@ export function RecentIncidents({ onViewAll, onSelectIncident }: RecentIncidents
                     <Clock className="w-3 h-3" />
                     {format(new Date(inc.created_at), "dd/MM/yyyy")}
                   </span>
+                  {inc.deadline && inc.status !== "closed" && (
+                    <span className={cn("text-xs flex items-center gap-1", new Date(inc.deadline) < new Date() ? "text-destructive font-medium" : "text-muted-foreground")}>
+                      <CalendarIcon className="w-3 h-3" />
+                      {format(new Date(inc.deadline), "dd/MM/yyyy")}
+                      {new Date(inc.deadline) < new Date() && " ⚠"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
