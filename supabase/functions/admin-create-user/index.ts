@@ -355,7 +355,7 @@ serve(async (req) => {
 
     const newUserId = createdUserData.user.id;
     const { error: profileUpsertError } = await serviceClient.from("profiles").upsert(
-      { id: newUserId, email, full_name: fullName, is_superadmin: false },
+      { id: newUserId, user_id: newUserId, email, full_name: fullName, is_superadmin: false },
       { onConflict: "id" },
     );
 
