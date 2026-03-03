@@ -132,7 +132,7 @@ export function LandingPage({ onGetStarted, onViewDemo }: LandingPageProps) {
                 Acceso al Sistema
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
-              <Button variant="outline" size="xl" onClick={onViewDemo} className="text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10">
+              <Button variant="outline" size="xl" onClick={onViewDemo} className="bg-transparent text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10 hover:text-primary-foreground">
                 <Eye className="w-5 h-5 mr-2" />
                 Ver Demo
               </Button>
