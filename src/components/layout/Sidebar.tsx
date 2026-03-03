@@ -55,7 +55,7 @@ export function Sidebar({ activeModule, onModuleChange, collapsed = false, onTog
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-accent flex items-center justify-center">
+          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center">
             <img src="/iQ_V1.svg" alt="QualiQ logo" className="w-5 h-5" />
           </div>
           {!collapsed && (
