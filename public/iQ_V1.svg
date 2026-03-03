@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   version="1.1"
+   id="svg1"
+   width="256"
+   height="256"
+   viewBox="0 0 256 256"
+   sodipodi:docname="iQ_V1.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath2">
+      <rect
+         style="font-variation-settings:'wght' 900;fill:#174a8c;fill-opacity:1;fill-rule:evenodd;stroke-width:1.438"
+         id="rect2"
+         width="89.054916"
+         height="93.682205"
+         x="99.8218"
+         y="100.79974" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="3.774"
+     inkscape:cx="3.0471648"
+     inkscape:cy="146.92634"
+     inkscape:window-width="3840"
+     inkscape:window-height="2089"
+     inkscape:window-x="3832"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <g
+     inkscape:groupmode="layer"
+     inkscape:label="Image"
+     id="g1" />
+  <g
+     id="g2"
+     transform="translate(-1.2569897,-4.4928521)">
+    <text
+       xml:space="preserve"
+       style="font-size:423.952px;line-height:60%;font-family:Orbitron;-inkscape-font-specification:'Orbitron, @wght=900';font-variation-settings:'wght' 900;text-align:end;letter-spacing:-0.520304px;word-spacing:0px;writing-mode:lr-tb;direction:ltr;text-anchor:end;fill:#174a8c;fill-opacity:1;fill-rule:evenodd;stroke-width:0.831331"
+       x="224.17474"
+       y="198.8143"
+       id="text1"
+       transform="scale(1.0267035,0.97399103)"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="223.65443"
+         y="198.8143"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:231.246px;font-family:Garet;-inkscape-font-specification:'Garet, @wght=900';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;font-variation-settings:'wght' 900;fill:#174a8c;fill-opacity:1;stroke-width:0.831331">Q</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:423.952px;line-height:60%;font-family:Orbitron;-inkscape-font-specification:'Orbitron, @wght=900';font-variation-settings:'wght' 900;text-align:end;letter-spacing:-0.520304px;word-spacing:0px;writing-mode:lr-tb;direction:ltr;text-anchor:end;fill:#174a8c;fill-opacity:1;fill-rule:evenodd;stroke-width:0.831331"
+       x="174.41183"
+       y="269.10284"
+       id="text1-8"
+       transform="matrix(1.0267035,0,0,0.97399103,-2.2483522,0)"
+       clip-path="url(#clipPath2)"><tspan
+         sodipodi:role="line"
+         id="tspan1-2"
+         x="173.89153"
+         y="269.10284"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:231.246px;font-family:Garet;-inkscape-font-specification:'Garet, @wght=900';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;font-variation-settings:'wght' 900;fill:#174a8c;fill-opacity:1;stroke-width:0.831331">i</tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer1"
+     inkscape:label="Image 1" />
+</svg>
