@@ -55,14 +55,18 @@ export function PredictiveAnalyticsView() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
+    if (!profile?.company_id) return;
     fetchInsights();
-  }, []);
+  }, [profile?.company_id]);
 
   const fetchInsights = async () => {
+    if (!profile?.company_id) return;
+
     setIsLoading(true);
     const { data, error } = await supabase
       .from("predictive_insights")
       .select("*")
+      .eq("company_id", profile.company_id)
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -106,10 +110,7 @@ export function PredictiveAnalyticsView() {
       }
 
       const { error } = await supabase.functions.invoke("analyze-capa-patterns", {
-        body: {
-          companyId: profile.company_id,
-          incidentsData,
-        },
+        body: { companyId: profile.company_id },
       });
 
       if (error) throw error;

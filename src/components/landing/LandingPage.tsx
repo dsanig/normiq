@@ -1,12 +1,11 @@
 import { 
   Shield, FileText, AlertTriangle, BarChart3, MessageSquare,
-  Lock, ArrowRight, Building2, Zap, Eye
+  Lock, ArrowRight, Building2, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface LandingPageProps {
   onGetStarted: () => void;
-  onViewDemo: () => void;
 }
 
 const features = [
@@ -18,7 +17,7 @@ const features = [
   { icon: Lock, title: "Seguridad & RGPD", description: "Datos encriptados, control de acceso por roles y logs de auditoría completos." },
 ];
 
-export function LandingPage({ onGetStarted, onViewDemo }: LandingPageProps) {
+export function LandingPage({ onGetStarted }: LandingPageProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -31,9 +30,6 @@ export function LandingPage({ onGetStarted, onViewDemo }: LandingPageProps) {
             <span className="font-bold text-xl tracking-tight text-foreground">QualiQ</span>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={onViewDemo}>
-              <Eye className="w-4 h-4 mr-1" /> Ver Demo
-            </Button>
             <Button variant="accent" size="sm" onClick={onGetStarted}>
               Acceso al Sistema
             </Button>
@@ -61,10 +57,6 @@ export function LandingPage({ onGetStarted, onViewDemo }: LandingPageProps) {
             <Button variant="hero" size="xl" onClick={onGetStarted}>
               Acceso al Sistema
               <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-            <Button variant="hero-outline" size="xl" onClick={onViewDemo}>
-              <Eye className="w-5 h-5 mr-2" />
-              Ver Demo
             </Button>
           </div>
           <p className="mt-6 text-sm text-muted-foreground">
@@ -131,10 +123,6 @@ export function LandingPage({ onGetStarted, onViewDemo }: LandingPageProps) {
               <Button variant="accent" size="xl" onClick={onGetStarted} className="bg-accent hover:bg-accent/90">
                 Acceso al Sistema
                 <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-              <Button variant="outline" size="xl" onClick={onViewDemo} className="bg-transparent text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10 hover:text-primary-foreground">
-                <Eye className="w-5 h-5 mr-2" />
-                Ver Demo
               </Button>
             </div>
           </div>
