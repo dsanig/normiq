@@ -29,7 +29,6 @@ serve(async (req) => {
   }
 
   try {
-    // Validate authentication
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -41,13 +40,11 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    // Create client with user's token to verify authentication
+
     const userSupabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Verify user is authenticated
     const { data: { user }, error: authError } = await userSupabase.auth.getUser();
     if (authError || !user) {
       console.error("Auth error:", authError?.message);
@@ -57,20 +54,15 @@ serve(async (req) => {
       );
     }
 
-    console.log("CAPA pattern analysis request authenticated for user:", user.id);
-
-    const { companyId, incidentsData } = await req.json();
-    
+    const { companyId } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Use service role client for database operations
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Verify user belongs to the requested company
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("company_id")
@@ -91,22 +83,44 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing CAPA patterns for company:", companyId);
+    const [{ data: incidentsData, error: incidentsError }, { data: auditsData, error: auditsError }] = await Promise.all([
+      supabase
+        .from("incidencias")
+        .select("id, incidencia_type, status, title, description, created_at, deadline, audit_id")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase
+        .from("audits")
+        .select("id, title, status, audit_date, created_at")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
 
-    if (!Array.isArray(incidentsData) || incidentsData.length === 0) {
+    if (incidentsError) throw incidentsError;
+    if (auditsError) throw auditsError;
+
+    if (!incidentsData || incidentsData.length === 0) {
       return new Response(
         JSON.stringify({ error: "No hay incidencias reales disponibles para analizar." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Format incidents data for analysis
-    const incidentsContext = JSON.stringify(incidentsData, null, 2);
+    const analysisContext = JSON.stringify(
+      {
+        incidents: incidentsData,
+        audits: auditsData ?? [],
+      },
+      null,
+      2
+    );
 
-    const userPrompt = `Analiza los siguientes datos de incidencias y detecta patrones predictivos:
+    const userPrompt = `Analiza los siguientes datos reales de la empresa y detecta patrones predictivos:
 
-DATOS DE INCIDENCIAS:
-${incidentsContext}
+DATOS:
+${analysisContext}
 
 Responde en formato JSON con esta estructura:
 {
@@ -131,7 +145,7 @@ Responde en formato JSON con esta estructura:
   ]
 }
 
-Genera entre 2 y 5 insights relevantes basados en los patrones detectados.`;
+Genera entre 2 y 5 insights relevantes basados únicamente en los datos proporcionados.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -162,12 +176,9 @@ Genera entre 2 y 5 insights relevantes basados en los patrones detectados.`;
       throw new Error("No content in AI response");
     }
 
-    console.log("AI response received, parsing insights...");
-
     const parsed = JSON.parse(content);
     const insights = parsed.insights || [];
 
-    // Insert insights and pattern detections
     for (const insight of insights) {
       const { data: insightData, error: insightError } = await supabase
         .from("predictive_insights")
@@ -200,8 +211,6 @@ Genera entre 2 y 5 insights relevantes basados en los patrones detectados.`;
         });
       }
     }
-
-    console.log("CAPA pattern analysis completed with", insights.length, "insights");
 
     return new Response(
       JSON.stringify({ success: true, insightsCount: insights.length }),

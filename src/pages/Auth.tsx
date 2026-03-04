@@ -11,17 +11,16 @@ import { z } from "zod";
 const emailSchema = z.string().email("Email inválido");
 const passwordSchema = z.string().min(6, "La contraseña debe tener al menos 6 caracteres");
 
-type AuthMode = "login" | "signup" | "demo";
+type AuthMode = "login" | "signup";
 
 export default function Auth() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [demoCode, setDemoCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; demoCode?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -141,62 +140,6 @@ export default function Auth() {
     }
   };
 
-  const handleDemoAccess = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!demoCode.trim()) {
-      setErrors({ demoCode: "Ingrese un código de demo" });
-      return;
-    }
-
-    // Basic client-side validation
-    if (demoCode.length > 50) {
-      setErrors({ demoCode: "Código inválido" });
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // Validate demo code via edge function (secure server-side validation)
-      const { data, error } = await supabase.functions.invoke("validate-demo-code", {
-        body: { code: demoCode.trim() },
-      });
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Ha ocurrido un error al validar el código",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (!data?.valid) {
-        toast({
-          title: "Código inválido",
-          description: data?.error || "El código no existe, ya ha sido utilizado o ha expirado.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Code is valid, switch to signup mode with demo indicator
-      toast({
-        title: "¡Código válido!",
-        description: "Complete su registro para acceder a la demo.",
-      });
-      setMode("signup");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ha ocurrido un error al validar el código",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -214,37 +157,11 @@ export default function Auth() {
           <h1 className="text-2xl font-bold text-foreground text-center mb-2">
             {mode === "login" && "Iniciar Sesión"}
             {mode === "signup" && "Crear Cuenta"}
-            {mode === "demo" && "Acceso Demo"}
           </h1>
           <p className="text-muted-foreground text-center mb-6">
             {mode === "login" && "Acceda a su plataforma de cumplimiento"}
             {mode === "signup" && "Regístrese para comenzar"}
-            {mode === "demo" && "Ingrese su código de demo"}
           </p>
-
-          {mode === "demo" && (
-            <form onSubmit={handleDemoAccess} className="space-y-4">
-              <div>
-                <Label htmlFor="demoCode">Código de Demo</Label>
-                <Input
-                  id="demoCode"
-                  type="text"
-                  value={demoCode}
-                  onChange={(e) => setDemoCode(e.target.value)}
-                  placeholder="Ingrese su código"
-                  className="mt-1"
-                  maxLength={50}
-                />
-                {errors.demoCode && (
-                  <p className="text-destructive text-sm mt-1">{errors.demoCode}</p>
-                )}
-              </div>
-              <Button type="submit" variant="accent" className="w-full" disabled={isLoading}>
-                {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Validar Código
-              </Button>
-            </form>
-          )}
 
           {(mode === "login" || mode === "signup") && (
             <form onSubmit={mode === "login" ? handleLogin : handleSignup} className="space-y-4">
@@ -320,15 +237,6 @@ export default function Auth() {
                     Regístrese
                   </button>
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  ¿Tiene un código de demo?{" "}
-                  <button
-                    onClick={() => setMode("demo")}
-                    className="text-accent hover:underline font-medium"
-                  >
-                    Acceder a Demo
-                  </button>
-                </p>
               </>
             )}
             {mode === "signup" && (
@@ -342,17 +250,7 @@ export default function Auth() {
                 </button>
               </p>
             )}
-            {mode === "demo" && (
-              <p className="text-sm text-muted-foreground">
-                ¿Ya tiene cuenta?{" "}
-                <button
-                  onClick={() => setMode("login")}
-                  className="text-accent hover:underline font-medium"
-                >
-                  Iniciar Sesión
-                </button>
-              </p>
-            )}
+
           </div>
         </div>
 
