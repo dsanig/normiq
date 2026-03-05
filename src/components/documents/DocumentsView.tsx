@@ -1268,7 +1268,7 @@ export function DocumentsView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Código</Label>
-                  <Input data-testid="document-code-input" placeholder="PNT-XXX-000" value={newDocCode} onChange={(e) => setNewDocCode(e.target.value)} />
+                  <Input data-testid="document-code-input" placeholder="PROC-XXX-000" value={newDocCode} onChange={(e) => setNewDocCode(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Título</Label>

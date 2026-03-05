@@ -25,15 +25,23 @@ export function usePermissions(): PermissionsState {
   const [isAdministrador, setIsAdministrador] = useState(false);
   const [isEditor, setIsEditor] = useState(false);
 
+  const hasTenantRole = async (userId: string, role: string) => {
+    const calls = [
+      rpcClient.rpc("has_role", { uid: userId, r: role }),
+      rpcClient.rpc("has_role", { _user_id: userId, _role: role }),
+    ];
+    for (const call of calls) {
+      const res = await call;
+      if (!res.error) return Boolean(res.data);
+    }
+    return false;
+  };
+
   const refreshPermissions = useCallback(async () => {
     setIsLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
 
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session?.user) {
+    if (!session?.user) {
       setIsSuperadmin(false);
       setIsAdministrador(false);
       setIsEditor(false);
@@ -42,31 +50,24 @@ export function usePermissions(): PermissionsState {
     }
 
     const userId = session.user.id;
-
-    const [superRes, adminRes, editorRes] = await Promise.all([
+    const [superRes, adminRole, editorRole] = await Promise.all([
       rpcClient.rpc("is_superadmin", { uid: userId }),
-      rpcClient.rpc("has_role", { _role: "Administrador", _user_id: userId }),
-      rpcClient.rpc("has_role", { _role: "Editor", _user_id: userId }),
+      hasTenantRole(userId, "Admin"),
+      hasTenantRole(userId, "Editor"),
     ]);
 
     setIsSuperadmin(!superRes.error && Boolean(superRes.data));
-    setIsAdministrador(!adminRes.error && Boolean(adminRes.data));
-    setIsEditor(!editorRes.error && Boolean(editorRes.data));
+    setIsAdministrador(adminRole);
+    setIsEditor(editorRole);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
     void refreshPermissions();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       void refreshPermissions();
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [refreshPermissions]);
 
   const canManageCompany = isSuperadmin || isAdministrador;

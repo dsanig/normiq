@@ -6,9 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Eres un experto en análisis predictivo para gestión de calidad en el sector farmacéutico y sanitario.
+const SYSTEM_PROMPT = `Eres un experto en análisis predictivo para gestión de calidad en el compliance ISO y mejora continua.
 
-Tu rol es detectar patrones en datos históricos de incidencias, desviaciones y CAPAs para predecir y prevenir problemas futuros.
+Tu rol es detectar patrones en datos históricos de no conformidades, acciones y riesgos para predecir y prevenir problemas futuros.
 
 TIPOS DE PATRONES A DETECTAR:
 1. Correlaciones temporales (estacionalidad, turnos, días de la semana)

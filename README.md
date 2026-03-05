@@ -1,99 +1,61 @@
-# Welcome to your Lovable project
+# QualiQ — Business Process & ISO Compliance DMS
 
-## Project info
+QualiQ es una aplicación Lovable + Supabase para **gestión documental multi-sector** y **cumplimiento ISO**.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Enfoque del producto
 
-## How can I edit this code?
+La plataforma está orientada a:
+- Control documental (versionado, estados, trazabilidad)
+- Gestión por procesos (mapa de procesos, owner, KPI opcional)
+- Cumplimiento ISO (matriz de cláusulas, controles y evidencias)
+- Auditorías internas, no conformidades y acciones (CAPA / mejora)
+- Configuración por tenant (empresa)
 
-There are several ways of editing your application.
+El foco principal es **ISO 9001**, con soporte configurable para **ISO 14001 / 27001 / 45001**.
 
-**Use Lovable**
+## Roles (RBAC)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **Superadmin** (plataforma)
+- **Admin** (tenant)
+- **Gestor de Calidad**
+- **Editor**
+- **Revisor**
+- **Aprobador**
+- **Lector**
 
-Changes made via Lovable will be committed automatically to this repo.
+> La autorización se valida server-side (RPC / políticas SQL + RLS). La UI no decide permisos.
 
-**Use your preferred IDE**
+## Flujo documental estándar ISO
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1. Borrador
+2. En revisión
+3. Revisado
+4. Aprobado
+5. Publicado
+6. Obsoleto
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Al publicar una nueva versión, la versión anterior queda obsoleta (solo lectura) y se mantiene el historial.
 
-Follow these steps:
+## Configuración ISO por empresa
+
+En `Configuración > Configuración ISO`:
+- Normas activas (toggles)
+- Tipos documentales permitidos
+- Flujo de aprobación (mínimos de revisores/aprobadores)
+- Catálogo de procesos/departamentos y plantillas de checklist (estructura JSON)
+
+## Desarrollo local
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Migraciones y despliegue
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Aplicar migraciones de Supabase, incluyendo:
+- `20260305123000_iso9001_multisector_reposition.sql`
 
-**Use GitHub Codespaces**
+## Guía de implantación ISO 9001
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-
-
-## Supabase admin user management env vars
-
-For root-admin user creation/password reset flows, configure these secrets for Supabase Edge Functions:
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (**server only**, never expose in frontend)
-
-Example:
-
-```sh
-supabase secrets set SUPABASE_URL=...
-supabase secrets set SUPABASE_ANON_KEY=...
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-```
-
-## SPA routing on custom domains
-
-This repo includes static-host fallbacks for React Router:
-
-- `public/_redirects` to rewrite all routes to `index.html` on hosts that support Netlify-style redirects.
-- `public/404.html` to redirect unknown routes back to `/` on hosts that serve a static 404 page.
-
-If your domain still shows an HTTP 404 at `/`, verify your hosting provider is serving the built `dist/` output for this project.
+Consulta `docs/iso-9001-quickstart.md`.
