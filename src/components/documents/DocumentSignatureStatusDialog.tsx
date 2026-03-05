@@ -104,8 +104,6 @@ export function DocumentSignatureStatusDialog({
           .map((row) => row.user_id)
       );
 
-      setShowOnlyResponsibilities(responsibleIds.size > 0);
-
       const signaturesByUser = new Map<string, { signedAt: string; method: string; metadata: string | null }>();
       for (const signature of signaturesData || []) {
         if (!signaturesByUser.has(signature.signed_by)) {
