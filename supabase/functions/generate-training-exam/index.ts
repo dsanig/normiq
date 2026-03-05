@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `Eres un experto en formación y evaluación para empresas del sector salud, farmacéutico y de dispositivos médicos.
 
-Tu tarea es generar un examen de 5 preguntas para validar la comprensión de un procedimiento normativo (PNT/SOP).
+Tu tarea es generar un examen de 5 preguntas para validar la comprensión de un procedimiento del sistema de gestión.
 
 REGLAS:
 1. Las preguntas deben evaluar comprensión real, no memorización

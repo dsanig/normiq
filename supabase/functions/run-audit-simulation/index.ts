@@ -12,7 +12,7 @@ Tu rol es realizar una simulación de inspección rigurosa basada en 21 CFR Part
 Evalúa documentación, procedimientos y prácticas de fabricación con el mismo rigor que en una inspección real.`,
   
   ema: `Eres un inspector experimentado de la EMA (European Medicines Agency).
-Tu rol es realizar una simulación de inspección basada en EU GMP Annexes, ICH guidelines y regulaciones europeas.
+Tu rol es realizar una simulación de inspección basada en buenas prácticas de auditoría interna ISO.
 Evalúa cumplimiento con directivas europeas de medicamentos y buenas prácticas de fabricación.`,
   
   aemps: `Eres un inspector experimentado de la AEMPS (Agencia Española de Medicamentos y Productos Sanitarios).
@@ -115,7 +115,7 @@ serve(async (req) => {
       ? documents.map((d: any) => `- ${d.code}: ${d.title} (${d.category}, v${d.version})`).join("\n")
       : "No hay documentos disponibles para revisar.";
 
-    const userPrompt = `Realiza una simulación de inspección para esta empresa farmacéutica/sanitaria.
+    const userPrompt = `Realiza una simulación de inspección para esta organización multi-sector.
 
 DOCUMENTOS DISPONIBLES PARA REVISIÓN:
 ${documentsContext}

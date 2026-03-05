@@ -9,7 +9,7 @@ interface LandingPageProps {
 }
 
 const features = [
-  { icon: FileText, title: "Gestión de SOPs/PNTs", description: "Redacción asistida por IA, control de versiones, flujos de aprobación y trazabilidad completa." },
+  { icon: FileText, title: "Gestión Documental ISO", description: "Redacción asistida por IA, control de versiones, flujos de aprobación y trazabilidad completa." },
   { icon: AlertTriangle, title: "No Conformidades & CAPAs", description: "Registro, análisis de causa raíz, acciones correctivas y seguimiento hasta cierre." },
   { icon: Shield, title: "Control de Cambios", description: "Gestión controlada de cambios con impacto automático en documentación relacionada." },
   { icon: BarChart3, title: "Analítica de Cumplimiento", description: "KPIs en tiempo real, tendencias y scoring de preparación para auditorías." },
@@ -41,11 +41,11 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
             Ecosistema de Cumplimiento con IA
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6 text-balance">
-            Gestión de Cumplimiento <span className="text-accent">Inteligente</span> para Sector Salud
+            Business Process & <span className="text-accent">ISO Compliance</span> DMS
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10">
-            Plataforma integral para empresas farmacéuticas, sanitarias y de dispositivos médicos en España.
-            SOPs, no conformidades, CAPAs y cumplimiento normativo — todo en un solo lugar.
+            Plataforma multi-sector para manufactura, servicios, logística, consultoría, IT y retail.
+            Documentos, procesos, auditorías y mejora continua en una sola plataforma.
           </p>
           <div className="flex items-center justify-center gap-4">
             <Button variant="hero" size="xl" onClick={onGetStarted}>
@@ -54,16 +54,16 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
             </Button>
           </div>
           <p className="mt-6 text-sm text-muted-foreground">
-            Conforme a normativa española y europea • AEMPS • AESAN • GMP/GDP
+            Basado en ISO 9001 y extensible a ISO 14001, ISO 27001 e ISO 45001
           </p>
         </div>
       </section>
 
       <section className="py-12 border-y border-border bg-secondary/30">
         <div className="container mx-auto px-4">
-          <p className="text-center text-sm text-muted-foreground mb-6">Diseñado para empresas reguladas en España</p>
+          <p className="text-center text-sm text-muted-foreground mb-6">Diseñado para organizaciones de múltiples sectores</p>
           <div className="flex items-center justify-center gap-12 flex-wrap opacity-50">
-            {["Farmacéuticas", "Nutraceúticas", "Dispositivos Médicos", "Laboratorios", "Wellness"].map((item) => (
+            {["Manufactura", "Servicios", "Logística", "Consultoría", "Retail"].map((item) => (
               <div key={item} className="flex items-center gap-2">
                 <Building2 className="w-5 h-5" />
                 <span className="font-medium">{item}</span>
@@ -78,8 +78,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Todo lo que necesita para el cumplimiento</h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Herramientas diseñadas específicamente para la gestión de calidad y regulatory affairs
-              en el sector salud español.
+              Herramientas configurables para control documental, procesos de negocio y compliance ISO.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -100,11 +99,10 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="container mx-auto max-w-4xl">
           <div className="bg-primary rounded-2xl p-8 md:p-12 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-4">
-              ¿Listo para transformar su gestión de cumplimiento?
+              ¿Listo para profesionalizar su sistema ISO?
             </h2>
             <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-              Únase a las empresas del sector salud español que ya confían en QualiQ
-              para su gestión de calidad y cumplimiento normativo.
+              Implemente un sistema de gestión basado en procesos, auditoría interna y mejora continua.
             </p>
             <Button variant="accent" size="xl" onClick={onGetStarted} className="bg-accent hover:bg-accent/90">
               Acceso al Sistema
